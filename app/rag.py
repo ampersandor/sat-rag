@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Sequence
@@ -175,6 +176,7 @@ class KnowledgeBase:
         self._matrix: List[List[float]] | None = None
         self._doc_norms: List[float] | None = None
 
+
     def load(self) -> None:
         files = sorted(self.data_dir.glob("*.txt"))
         order = 0
@@ -199,6 +201,7 @@ class KnowledgeBase:
         self._matrix = self._vectorizer.fit_transform(texts)
         self._doc_norms = vector_norms(self._matrix)
 
+
     def search(self, query: str, top_k: int = 3) -> Sequence[tuple[DocumentChunk, float]]:
         if not query.strip():
             return []
@@ -219,6 +222,7 @@ class KnowledgeBase:
         results = []
         for idx, score in ranked:
             results.append((self.chunks[int(idx)], float(score)))
+
         return results
 
 
