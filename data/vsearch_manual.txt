@@ -1,0 +1,91 @@
+VSEARCH Command Reference
+=========================
+
+Overview
+--------
+VSEARCH is an open-source alternative to USEARCH implementing sequence search,
+clustering, chimera detection, and OTU/ASV generation for high-throughput
+amplicon pipelines. Commands follow the pattern `vsearch --command arguments`.
+
+General options
+---------------
+* `--threads <n>` — Number of CPU threads (default 1).
+* `--fastaprefix <string>` — Prefix headers in FASTA output.
+* `--log <file>` — Write verbose log output.
+* `--fasta_width <n>` — Set FASTA line width for output (default 80).
+* `--quiet` — Reduce console output.
+
+Input sanitation
+----------------
+* `--fastq_ascii <33|64>` — Specify FASTQ ASCII offset.
+* `--fastx_filter` — Filter FASTQ files by quality and length.
+* `--fastq_minlen`, `--fastq_maxlen` — Minimum/maximum length filters.
+* `--fastq_maxee <n>` — Maximum expected errors per read.
+* `--fastx_mask <in> --fastx_out <out>` — Mask low-complexity regions.
+* `--reverse`, `--reverse_complement` — Reverse orientation of sequences.
+
+Dereplication and sorting
+-------------------------
+* `--derep_fulllength <in> --output <out>` — Deduplicate sequences by full-length
+  identity, writing abundance annotations.
+* `--derep_prefix` — Deduplicate by prefix identity; useful for incremental
+  clustering.
+* `--minseqlength <n>` — Discard shorter sequences during dereplication.
+* `--sizeout` / `--sizein` — Control `;size=NN;` annotations in FASTA headers.
+* `--sortbysize <in> --output <out>` — Sort by abundance before clustering.
+* `--sortbylength` — Sort by length to optimise memory usage.
+
+Clustering and OTU picking
+--------------------------
+* `--cluster_fast <in> --id <0-1> --centroids <out>` — Greedy clustering using
+  abundance order (requires dereplicated input).
+* `--cluster_smallmem` — Memory-efficient clustering for large datasets.
+* `--cluster_size` — Abundance-weighted clustering emphasising dominant reads.
+* `--cluster_unoise` — UNOISE3 denoising to generate ZOTUs.
+* `--clusterout_id --clusters <prefix>` — Output separate FASTA per cluster.
+* `--iddef <1-4>` — Identity definition; 1=global pairwise, 2=alignment, etc.
+
+Searching and mapping
+---------------------
+* `--usearch_global <query> --db <ref> --id <0-1> --strand both` — Global search
+  for taxonomy or OTU assignment.
+* `--search_exact` — Exact match searching.
+* `--usearch_local` — Local alignment search.
+* `--align <query> --db <ref>` — Pairwise alignment reporting.
+* `--blast6out <file>` — Output search results in BLAST tabular format.
+
+Chimera detection
+-----------------
+* `--uchime_ref <in> --db <ref> --nonchimeras <out>` — Reference-based UCHIME
+  algorithm.
+* `--uchime_denovo <in> --nonchimeras <out>` — De novo chimera detection.
+* `--uchime3_denovo` — UNOISE3-tuned chimera removal for high-quality reads.
+* Key options: `--mindiv`, `--mindiffs`, `--minh`, `--xn`, `--dn` adjust
+  sensitivity.
+
+OTU/ASV tables
+--------------
+* `--otutab <reads> --otus <otus> --otutabout <table>` — Generate OTU table by
+  mapping reads to centroid sequences.
+* `--otutab_mindiv <n>` — Minimum divergence when assigning reads.
+* `--otutab_norm <depth>` — Rarefy OTU table to a fixed depth.
+* `--relabund` — Report relative abundance instead of raw counts.
+
+Additional utilities
+--------------------
+* `--fastq_mergepairs <forward> --reverse <reverse> --fastqout <out>` — Merge
+  paired-end reads with overlap scoring.
+* `--fastq_join` — Overlap-join FASTQ reads with simple heuristics.
+* `--msaout <file>` — Output alignments from search/cluster operations.
+* `--consout <file>` — Write consensus sequences per cluster.
+* `--qmask <none|soft|dust>` — Quality masking prior to clustering.
+* `--strand <both|plus|minus>` — Control strand search orientation.
+
+Best practices
+--------------
+* Always dereplicate and sort input before clustering for reproducible results.
+* Set `--id 0.97` for traditional OTUs; `0.99` or `1.0` for ASV-like resolution.
+* UNOISE algorithms require a minimum abundance threshold (default 8) to avoid
+  noise amplification.
+* Provide high-quality reference databases in FASTA for taxonomy (`--db`).
+* Inspect `.uc` files to audit cluster assignments and read reassignment.
