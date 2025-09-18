@@ -1,0 +1,104 @@
+MAFFT Multiple Sequence Alignment Manual (summary)
+================================================
+
+Overview
+--------
+MAFFT is a fast multiple sequence alignment program supporting a variety of
+alignment strategies optimized for nucleotide and protein sequences of different
+lengths and divergence levels. The main executable is `mafft` and accepts
+numerous command-line options to tune alignment accuracy, runtime and memory
+consumption.
+
+Core usage patterns
+-------------------
+Run MAFFT by providing an input FASTA file. The default output is written to
+STDOUT unless `--output` or shell redirection is used.
+
+```
+mafft [options] input.fasta > aligned.fasta
+```
+
+Automatic strategy selection
+----------------------------
+* `--auto` — Analyse the dataset and automatically select an appropriate
+  algorithm (FFT-NS-2, L-INS-i, G-INS-i, etc.). Suitable starting point for most
+  datasets.
+* `--6merpair` — Use 6-mer distance for the progressive alignment phase (default
+  for protein sequences).
+* `--retree <n>` — Recompute the guide tree `n` times to refine the alignment.
+
+Progressive FFT-NS methods (fast)
+---------------------------------
+* `--globalpair` — Global pairwise alignment using Needleman–Wunsch dynamic
+  programming. Accurate for full-length homologs, slower than default.
+* `--localpair` — Local pairwise alignment using Smith–Waterman. Recommended for
+  sequences with conserved motifs and large indels.
+* `--genafpair` — Genomic alignment using a Fourier transform approach with
+  anchors; handles long sequences with repeats.
+* `--maxiterate <n>` — Perform iterative refinement up to `n` cycles. `--maxiterate 0`
+  disables refinement (fastest). Typical values: 100 or 1000 for high accuracy.
+
+Iterative refinement methods (accurate)
+---------------------------------------
+* `--linsi` — L-INS-i algorithm; uses local pairwise alignment information and
+  iterative refinement. High accuracy for a moderate number of sequences.
+* `--ginsi` — G-INS-i algorithm; global homology assumption. Effective for
+  sequences with uniform lengths.
+* `--einsi` — E-INS-i algorithm; handles sequences with multiple conserved
+  domains and large unalignable regions.
+* `--qinsi` — Q-INS-i algorithm for RNA sequences, uses secondary structure
+  information from base-pairing probabilities. Requires `--rna` or RNA input.
+
+Input and output options
+------------------------
+* `--thread <n>` — Number of CPU threads. The default is 1.
+* `--anysymbol` — Allow unusual residue characters without treating them as
+  gaps.
+* `--preservecase` — Preserve lower/upper-case characters in the output.
+* `--inputorder` — Keep the input sequence order in the output alignment.
+* `--reorder` — Reorder sequences in the output based on the guide tree.
+* `--treeout` — Write the guide tree to `<input>.tree`.
+* `--quiet` — Suppress progress reporting.
+* `--clustalout` — Write alignment in Clustal format instead of FASTA.
+
+Handling large datasets
+-----------------------
+* `--parttree` — Use the PartTree algorithm to construct an approximate guide
+  tree for very large datasets; reduces memory usage.
+* `--partsize <n>` — Control the size of sub-alignments when using `--parttree`.
+* `--leavegappyregion` — Avoid trimming gappy regions during iterative
+  refinement, useful for sequencing reads.
+* `--add` / `--addfragments` — Add new sequences to an existing alignment.
+* `--keeplength` — Keep alignment length unchanged when adding fragments.
+
+Scoring adjustments
+-------------------
+* `--op <float>` — Gap opening penalty (default ~1.53 for proteins, 1.0 for DNA).
+* `--ep <float>` — Offset (gap extension) penalty. Lower values allow longer gaps.
+* `--lop` / `--lep` — Late phase gap open/extend penalties used during
+  refinement.
+* `--bl <matrix>` — Use specified scoring matrix (`BLOSUM62`, `JTT200`, etc.).
+* `--kimura 1` — Apply Kimura correction for nucleotide distances.
+
+RNA-specific options
+--------------------
+* `--rna` — Interpret input as RNA; convert T to U in scoring.
+* `--clustalout --qinsi --ep 0` — Typical settings for structural RNA alignment
+  when pairing probabilities are provided.
+
+Quality assessment
+------------------
+* `--summary <file>` — Output per-sequence score summary.
+* `--hash <size>` — Hash table size for FFT; increasing can reduce collisions.
+* `--op 1.0 --ep 0.1 --maxiterate 1000` — Balanced high-accuracy profile for
+  small data sets.
+
+Troubleshooting tips
+--------------------
+* Memory errors often occur when aligning genomes without `--parttree`.
+* Use `--reorder` for best accuracy; combine with `--inputorder` if original
+  order is important.
+* For extremely divergent sequences, `--globalpair --maxiterate 1000` improves
+  alignment quality but increases runtime.
+* Remove extremely short fragments or use `--addfragments` to avoid forcing them
+  into the full-length alignment.

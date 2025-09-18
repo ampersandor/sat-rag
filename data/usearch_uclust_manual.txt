@@ -1,0 +1,89 @@
+UCLUST (USEARCH) Command Summary
+================================
+
+Overview
+--------
+UCLUST is a greedy clustering algorithm implemented in the USEARCH toolkit. It
+performs sequence clustering, chimera detection, OTU picking and related tasks
+for microbial amplicon pipelines. USEARCH commands are invoked with
+`usearch <command> <arguments>`.
+
+Common global options
+---------------------
+* `--threads <n>` — Number of worker threads (default 1).
+* `--log <file>` — Write a detailed log file of the run.
+* `--quiet` — Reduce progress output.
+* `--notmatched <fasta>` — Write sequences that failed a search to a FASTA file.
+* `--matched <fasta>` — Write sequences that produced hits to a FASTA file.
+* `--uc <file>` — Generate a tab-delimited cluster assignment file.
+
+Dereplication and sorting
+-------------------------
+* `-derep_fulllength <in> -output <out>` — Merge identical sequences, keeping
+  abundance counts in headers.
+* `-sizeout` — Append size annotations (`;size=NN;`) in FASTA headers.
+* `-minseqlength <n>` — Discard sequences shorter than `n` bp.
+* `-sortbysize <in> -output <out>` — Sort sequences descending by abundance.
+* `-sortbylength <in> -output <out>` — Sort sequences descending by length.
+
+Clustering commands
+-------------------
+* `-cluster_fast <in> -id <0-1> -centroids <out>` — Greedy clustering of
+  sequences sorted by decreasing abundance. Recommended workflow after
+  dereplication.
+* `-cluster_smallmem <in> -id <0-1> -centroids <out>` — Memory-conservative
+  clustering for very large datasets. Requires sequences sorted by length.
+* `-cluster_otus <in> -minsize <n> -otus <out>` — One-step OTU clustering with
+  chimera filtering at 97% identity by default.
+* `-cluster_unoise <in> -minsize <n> -unoise <out>` — Error-correct amplicons and
+  infer ZOTUs using the UNOISE algorithm.
+* `-alpha_div <in> -output <out>` — Calculate alpha diversity metrics from OTU
+  tables.
+
+Chimera filtering
+-----------------
+* `-uchime_ref <in> -db <ref> -strand both -nonchimeras <out>` — Detect chimeras
+  against a reference database using UCHIME.
+* `-uchime_denovo <in> -nonchimeras <out>` — Reference-free chimera detection.
+* `-uchime3_denovo` — UNOISE3 chimera detection tuned for Illumina reads.
+* Important parameters: `-mindiffs`, `-xn`, `-minh`, `-mindiv` control decision
+  thresholds.
+
+Searching and OTU assignment
+----------------------------
+* `-usearch_global <query> -db <ref> -id <0-1> -strand both -otutabout <out>` —
+  Global alignment search for OTU picking or taxonomy assignment.
+* `-search_exact <query> -db <ref>` — Exact string matching for barcode mapping.
+* `-usearch_local` — Local alignment search allowing mismatches and indels.
+* `-fastx_uniques <in> -fastaout <out>` — Dereplicate nucleotide sequences using
+  quality-aware heuristics.
+* `-fastq_filter <in.fastq> -fastqout <out.fastq> -fastq_maxee <max>` — Filter
+  reads by expected error.
+
+Quality filtering and preprocessing
+-----------------------------------
+* `-fastq_maxee <n>` — Maximum expected errors per read.
+* `-fastq_minlen <n>` — Minimum length after trimming.
+* `-fastq_truncqual <q> -fastq_trunclen <L>` — Trim reads at first base with
+  quality `<q>` or to length `<L>`.
+* `-fastx_revcomp` — Reverse complement FASTA/FASTQ sequences.
+* `-fastq_stats` — Summarise read quality statistics.
+
+OTU tables and taxonomy
+-----------------------
+* `-otutab <reads> -otus <otus> -otutabout <table>` — Create an OTU read count
+  table using global search.
+* `-otutab_norm` — Normalize OTU table counts to a specified depth.
+* `-sintax <query> -db <ref> -tabbedout <out> -strand both` — Taxonomic
+  annotation using the SINTAX classifier.
+* `-makeudb_usearch <ref.fasta>` — Create a database index for rapid searching.
+
+Troubleshooting and tips
+------------------------
+* Input files must be sorted appropriately for greedy clustering.
+* Use `-sizein` when reading dereplicated FASTA with `;size=NN;` annotations.
+* Identity thresholds around `0.97` mimic traditional OTUs; higher thresholds
+  (0.99) produce ASVs but require quality filtering.
+* UNOISE and UCHIME algorithms need minimum abundance (`-minsize`) to avoid
+  inflating spurious variants.
+* Keep FASTA headers simple; spaces terminate the identifier.
