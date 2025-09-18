@@ -1,14 +1,157 @@
 """Simple retrieval-augmented QA over alignment manuals."""
 from __future__ import annotations
 
+import math
 import re
+from collections import Counter
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+
+DEFAULT_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "but",
+    "by",
+    "for",
+    "from",
+    "has",
+    "have",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "no",
+    "not",
+    "of",
+    "on",
+    "or",
+    "such",
+    "that",
+    "the",
+    "their",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "to",
+    "was",
+    "will",
+    "with",
+}
+
+
+class SimpleTfidfVectorizer:
+    """Minimal TF-IDF vectorizer avoiding the heavy scikit-learn dependency."""
+
+    def __init__(self, stop_words: set[str] | None = None, use_bigrams: bool = True) -> None:
+        self.stop_words = stop_words or DEFAULT_STOP_WORDS
+        self.use_bigrams = use_bigrams
+        self.vocabulary_: dict[str, int] = {}
+        self.idf_: List[float] | None = None
+
+    def fit_transform(self, documents: Sequence[str]) -> List[List[float]]:
+        tokens_per_doc = [self._tokenise(doc) for doc in documents]
+        self._build_vocabulary(tokens_per_doc)
+        return self._to_matrix(tokens_per_doc)
+
+    def transform(self, documents: Sequence[str]) -> List[List[float]]:
+        if self.idf_ is None:
+            raise RuntimeError("Vectorizer has not been fitted")
+        tokens_per_doc = [self._tokenise(doc) for doc in documents]
+        return self._to_matrix(tokens_per_doc)
+
+    def _tokenise(self, document: str) -> List[str]:
+        words = [
+            word
+            for word in re.findall(r"\b\w+\b", document.lower())
+            if word and word not in self.stop_words
+        ]
+        if not words:
+            return []
+        if not self.use_bigrams:
+            return words
+        tokens = list(words)
+        tokens.extend(" ".join(pair) for pair in zip(words, words[1:]))
+        return tokens
+
+    def _build_vocabulary(self, tokens_per_doc: Sequence[List[str]]) -> None:
+        vocab: dict[str, int] = {}
+        doc_freq: Counter[str] = Counter()
+        for tokens in tokens_per_doc:
+            unique_tokens = set(tokens)
+            for token in unique_tokens:
+                doc_freq[token] += 1
+            for token in tokens:
+                if token not in vocab:
+                    vocab[token] = len(vocab)
+        self.vocabulary_ = vocab
+        n_docs = len(tokens_per_doc)
+        idf = [0.0 for _ in range(len(vocab))]
+        for token, idx in vocab.items():
+            df = doc_freq[token]
+            idf[idx] = math.log((1 + n_docs) / (1 + df)) + 1.0
+        self.idf_ = idf
+
+    def _to_matrix(self, tokens_per_doc: Sequence[List[str]]) -> List[List[float]]:
+        if self.idf_ is None:
+            raise RuntimeError("Vectorizer has not been fitted")
+        if not self.vocabulary_:
+            return [[0.0] * 0 for _ in range(len(tokens_per_doc))]
+        matrix = [
+            [0.0 for _ in range(len(self.vocabulary_))]
+            for _ in range(len(tokens_per_doc))
+        ]
+        for row, tokens in enumerate(tokens_per_doc):
+            if not tokens:
+                continue
+            counts: Counter[int] = Counter(
+                self.vocabulary_.get(token)
+                for token in tokens
+                if token in self.vocabulary_
+            )
+            total = float(len(tokens))
+            for idx, freq in counts.items():
+                if idx is None:
+                    continue
+                matrix[row][idx] = (freq / total) * self.idf_[idx]
+        return matrix
+
+
+def vector_norms(matrix: Sequence[Sequence[float]]) -> List[float]:
+    norms: List[float] = []
+    for row in matrix:
+        norm = math.sqrt(sum(value * value for value in row))
+        if norm == 0.0:
+            norm = 1e-12
+        norms.append(norm)
+    return norms
+
+
+def cosine_similarity_dense(
+    matrix: Sequence[Sequence[float]],
+    matrix_norms: Sequence[float],
+    query_vec: Sequence[float],
+    query_norm: float,
+) -> List[float]:
+    scores: List[float] = []
+    for row, norm in zip(matrix, matrix_norms):
+        dot = sum(value * weight for value, weight in zip(row, query_vec))
+        denom = norm * query_norm
+        if denom == 0.0:
+            scores.append(0.0)
+        else:
+            scores.append(dot / denom)
+    return scores
 
 
 @dataclass
@@ -29,8 +172,10 @@ class KnowledgeBase:
         self.chunk_size = chunk_size
         self.overlap = overlap
         self.chunks: List[DocumentChunk] = []
-        self._vectorizer: TfidfVectorizer | None = None
-        self._matrix = None
+        self._vectorizer: SimpleTfidfVectorizer | None = None
+        self._matrix: List[List[float]] | None = None
+        self._doc_norms: List[float] | None = None
+
 
     def load(self) -> None:
         files = sorted(self.data_dir.glob("*.txt"))
@@ -52,24 +197,32 @@ class KnowledgeBase:
 
     def _fit(self) -> None:
         texts = [chunk.content for chunk in self.chunks]
-        self._vectorizer = TfidfVectorizer(
-            stop_words="english", ngram_range=(1, 2), min_df=1
-        )
+        self._vectorizer = SimpleTfidfVectorizer()
         self._matrix = self._vectorizer.fit_transform(texts)
+        self._doc_norms = vector_norms(self._matrix)
+
 
     def search(self, query: str, top_k: int = 3) -> Sequence[tuple[DocumentChunk, float]]:
         if not query.strip():
             return []
-        if self._vectorizer is None or self._matrix is None:
+        if self._vectorizer is None or self._matrix is None or self._doc_norms is None:
             raise RuntimeError("Knowledge base has not been loaded")
         query_vec = self._vectorizer.transform([query])
-        scores = cosine_similarity(query_vec, self._matrix).ravel()
-        if not np.any(scores):
+        query_norm = vector_norms(query_vec)[0]
+        if query_norm == 0.0:
             return []
-        top_indices = scores.argsort()[::-1][:top_k]
+        scores = cosine_similarity_dense(self._matrix, self._doc_norms, query_vec[0], query_norm)
+        if not any(scores):
+            return []
+        ranked = sorted(
+            ((idx, score) for idx, score in enumerate(scores)),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )[:top_k]
         results = []
-        for idx in top_indices:
-            results.append((self.chunks[int(idx)], float(scores[int(idx)])))
+        for idx, score in ranked:
+            results.append((self.chunks[int(idx)], float(score)))
+
         return results
 
 

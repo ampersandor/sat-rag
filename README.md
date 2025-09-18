@@ -9,7 +9,7 @@ chatbot-style interface that responds with relevant excerpts.
 
 - ✅ Retrieval-augmented question answering across custom documentation.
 - ✅ FastAPI endpoint for integration with web front-ends (such as the companion React UI).
-- ✅ TF–IDF vector search with multi-paragraph chunking.
+- ✅ TF–IDF vector search with multi-paragraph chunking (pure Python, no scikit-learn dependency).
 - ✅ Simple health check endpoint for monitoring.
 - ✅ Pytest coverage for the retrieval core.
 
